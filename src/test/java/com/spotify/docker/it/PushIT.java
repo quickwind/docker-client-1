@@ -17,13 +17,11 @@
 
 package com.spotify.docker.it;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.io.Resources;
-
 import com.spotify.docker.Polling;
 import com.spotify.docker.client.ContainerNotFoundException;
 import com.spotify.docker.client.DefaultDockerClient;
 import com.spotify.docker.client.DockerClient;
+import com.spotify.docker.client.DockerException;
 import com.spotify.docker.client.ImagePushFailedException;
 import com.spotify.docker.client.messages.AuthConfig;
 import com.spotify.docker.client.messages.ContainerConfig;
@@ -31,6 +29,9 @@ import com.spotify.docker.client.messages.ContainerCreation;
 import com.spotify.docker.client.messages.ContainerInfo;
 import com.spotify.docker.client.messages.HostConfig;
 import com.spotify.docker.client.messages.PortBinding;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.io.Resources;
 
 import org.junit.After;
 import org.junit.Before;
@@ -40,6 +41,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.rules.TestName;
 
+import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
@@ -117,17 +119,23 @@ public class PushIT {
     }
   }
 
+  private static String buildImage(DockerClient client, String name)
+      throws InterruptedException, DockerException, IOException {
+    final String dockerDirectory = Resources.getResource("dockerDirectory").getPath();
+    final String imageId = client.build(Paths.get(dockerDirectory), name);
+    System.out.printf("built imageId=%s with name=%s\n", imageId, name);
+    return imageId;
+  }
+
   @Test
   public void testPushImageToPrivateAuthedRegistryWithoutAuth() throws Exception {
     registryContainerId = startAuthedRegistry(client);
 
     // Make a DockerClient without AuthConfig
     final DefaultDockerClient client = DefaultDockerClient.fromEnv().build();
+    buildImage(client, LOCAL_IMAGE);
 
     // Push an image to the private registry and check it fails
-    final String dockerDirectory = Resources.getResource("dockerDirectory").getPath();
-    client.build(Paths.get(dockerDirectory), LOCAL_IMAGE);
-
     exception.expect(ImagePushFailedException.class);
     exception.expectMessage("no basic auth credentials");
     client.push(LOCAL_IMAGE);
@@ -138,8 +146,7 @@ public class PushIT {
     registryContainerId = startAuthedRegistry(client);
 
     // Push an image to the private registry and check it succeeds
-    final String dockerDirectory = Resources.getResource("dockerDirectory").getPath();
-    client.build(Paths.get(dockerDirectory), LOCAL_IMAGE);
+    buildImage(client, LOCAL_IMAGE);
     client.push(LOCAL_IMAGE);
     // We should be able to pull it again
     client.pull(LOCAL_IMAGE);
@@ -153,8 +160,7 @@ public class PushIT {
     final DefaultDockerClient client = DefaultDockerClient.fromEnv().build();
 
     // Push an image to the private registry and check it succeeds
-    final String dockerDirectory = Resources.getResource("dockerDirectory").getPath();
-    client.build(Paths.get(dockerDirectory), LOCAL_IMAGE);
+    buildImage(client, LOCAL_IMAGE);
     client.push(LOCAL_IMAGE);
     // We should be able to pull it again
     client.pull(LOCAL_IMAGE);
@@ -165,8 +171,7 @@ public class PushIT {
     registryContainerId = startUnauthedRegistry(client);
 
     // Push an image to the private registry and check it succeeds
-    final String dockerDirectory = Resources.getResource("dockerDirectory").getPath();
-    client.build(Paths.get(dockerDirectory), LOCAL_IMAGE);
+    buildImage(client, LOCAL_IMAGE);
     client.push(LOCAL_IMAGE);
     // We should be able to pull it again
     client.pull(LOCAL_IMAGE);
